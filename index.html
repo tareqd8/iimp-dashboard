@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="en" data-bs-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Needs Assessment Dashboard</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<link rel="stylesheet" href="https://unpkg.com/tabulator-tables@6.2.1/dist/css/tabulator_bootstrap5.min.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&display=swap">
+<style>
+/* Light-only theme based on the IIIM site palette: UN blue, navy, light greys, Lato */
+:root {
+  color-scheme: light;
+  --un-blue: #009edb; --un-blue-dark: #0077a8; --navy: #1a2b4c;
+  --surface-0: #f2f3f3; --surface-1: #ffffff; --border: #dfe1e0;
+  --text-primary: #231f20; --text-secondary: #4d4f53; --text-muted: #8a8a8a;
+  --grid: #e9eaea;
+  --series-1: #009edb; --series-2: #1a2b4c;
+  --seq-light: #b8e2f4;
+  --filter-bg: #e0f3fb; --filter-ink: #00577c;
+}
+body { background: var(--surface-0); color: var(--text-primary); font-family: Lato, "Segoe UI", Arial, sans-serif; }
+.navbar { background: var(--navy); border-bottom: 4px solid var(--un-blue); }
+.navbar-brand { font-weight: 900; color: #fff; letter-spacing: .01em; text-transform: uppercase; font-size: 1.1rem; }
+.navbar .btn-load { color: #fff; border: 1px solid rgba(255,255,255,.6); }
+.navbar .btn-load:hover { background: var(--un-blue); border-color: var(--un-blue); color: #fff; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 6px; }
+.card-title { font-size: .95rem; font-weight: 700; margin: 0; color: var(--navy); }
+.card-sub { font-size: .78rem; color: var(--text-muted); }
+.kpi { border-top: 3px solid var(--un-blue); }
+.kpi .val { font-size: 2rem; font-weight: 900; line-height: 1.1; color: var(--navy); font-variant-numeric: tabular-nums; }
+.kpi .lbl { font-size: .8rem; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: .02em; }
+.kpi .sub { font-size: .75rem; color: var(--text-muted); }
+.kpi .pct { font-size: 1.5rem; font-weight: 700; margin-left: .6rem; color: var(--un-blue-dark); }
+.kpi .pct.navy { color: var(--navy); }
+.kpi .share { height: 6px; border-radius: 3px; background: var(--grid); margin-top: .55rem; overflow: hidden; }
+.kpi .share > span { display: block; height: 100%; border-radius: 3px; }
+.chart { width: 100%; height: 300px; }
+.chart.tall { height: 360px; }
+#map { height: 420px; border-radius: 0 0 6px 6px; }
+.nav-tabs { border-color: var(--border); }
+.nav-tabs .nav-link { color: var(--text-secondary); font-weight: 700; border: 0; border-bottom: 3px solid transparent; }
+.nav-tabs .nav-link:hover { color: var(--un-blue-dark); border-color: transparent; }
+.nav-tabs .nav-link.active { color: var(--navy); background: transparent; border-bottom-color: var(--un-blue); }
+.filter-row { position: sticky; top: 0; z-index: 1001; background: var(--surface-0); padding: .6rem 0; }
+.chip { display: inline-flex; align-items: center; gap: .35rem; background: var(--filter-bg); color: var(--filter-ink); border-radius: 999px; padding: .15rem .6rem; font-size: .78rem; margin: .1rem .25rem .1rem 0; border: 1px solid #b8e2f4; }
+.chip:hover { background: #cdebf8; }
+.form-select, .form-control { background-color: var(--surface-1); border-color: var(--border); color: var(--text-primary); }
+.form-select:focus, .form-control:focus { border-color: var(--un-blue); box-shadow: 0 0 0 .2rem rgba(0,158,219,.2); }
+.btn-link { color: var(--un-blue-dark); }
+.btn-outline-secondary { color: var(--navy); border-color: var(--border); }
+.btn-outline-secondary:hover { background: var(--navy); border-color: var(--navy); color: #fff; }
+.note { font-size: .78rem; color: var(--text-muted); }
+.tabulator { font-size: .82rem; border-radius: 0 0 6px 6px; }
+.tabulator .tabulator-header .tabulator-col { background: #f7f8f8; color: var(--navy); }
+.tabulator .tabulator-header .tabulator-col, .tabulator-row .tabulator-cell { border-right: 1px solid var(--border) !important; }
+.tabulator-row { border-bottom: 1px solid var(--border) !important; }
+.tabulator .tabulator-header { border-bottom: 2px solid var(--un-blue) !important; }
+.tabulator { border: 1px solid var(--border) !important; }
+.tabulator .tf-select { font-size: .78rem; padding: .2rem 1.6rem .2rem .45rem; min-width: 90px; background-position: right .4rem center; }
+.tabulator .tabulator-header-filter input { font-size: .78rem; padding: .2rem .45rem; border: 1px solid var(--border); border-radius: .25rem; }
+.leaflet-popup-content { font-size: .82rem; font-family: Lato, Arial, sans-serif; }
+.leaflet-popup-content b { font-weight: 700; color: var(--navy); }
+.cl { width: 100%; height: 100%; border-radius: 50%; background: var(--un-blue); color: #fff; font-weight: 700; font-size: .8rem;
+  display: flex; align-items: center; justify-content: center; border: 3px solid #fff; box-shadow: 0 0 0 1px var(--un-blue); }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <div class="container-fluid px-3">
+    <span class="navbar-brand mb-0">Needs Assessment Dashboard</span>
+    <div class="d-flex gap-2 align-items-center">
+      <label class="btn btn-sm btn-load mb-0" title="Load an updated cleaned workbook (.xlsx)">
+        Load Excel<input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" hidden>
+      </label>
+    </div>
+  </div>
+</nav>
+
+<main class="container-fluid px-3 pb-4">
+  <ul class="nav nav-tabs mt-2" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabNA" type="button">Needs Assessments</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabRef" type="button">Referrals</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabFGD" type="button">Focus Groups</button></li>
+  </ul>
+
+  <div class="tab-content">
+    <!-- ============ NEEDS ASSESSMENTS ============ -->
+    <div class="tab-pane fade show active" id="tabNA">
+      <div class="filter-row">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <select class="form-select form-select-sm w-auto" id="fYear"><option value="">All years</option></select>
+          <select class="form-select form-select-sm w-auto" id="fMonth"><option value="">All months</option></select>
+          <select class="form-select form-select-sm w-auto" id="fCountry"><option value="">All countries</option></select>
+          <select class="form-select form-select-sm w-auto" id="fGender"><option value="">All HoH genders</option></select>
+          <select class="form-select form-select-sm w-auto" id="fForm"><option value="">Full + quick forms</option><option>Full</option><option>Quick</option></select>
+          <button class="btn btn-sm btn-link text-decoration-none" id="resetNA">Reset filters</button>
+          <span id="chipsNA"></span>
+        </div>
+      </div>
+
+      <div class="row g-3" id="kpisNA"></div>
+
+      <div class="row g-3 mt-0">
+        <div class="col-lg-7">
+          <div class="card h-100">
+            <div class="card-body pb-2"><p class="card-title">Assessments by location</p></div>
+            <div id="map"></div>
+          </div>
+        </div>
+        <div class="col-lg-5">
+          <div class="card h-100"><div class="card-body">
+            <p class="card-title">Share of households answering Yes</p>
+            <div class="card-sub">% of households who answered each question. Click a bar to filter.</div>
+            <div class="chart tall" id="chNeeds"></div>
+          </div></div>
+        </div>
+      </div>
+
+      <div class="row g-3 mt-0">
+        <div class="col-md-6 col-xl-4"><div class="card h-100"><div class="card-body">
+          <p class="card-title">Households by country</p><div class="card-sub">Click to filter</div>
+          <div class="chart" id="chCountry"></div></div></div></div>
+        <div class="col-md-6 col-xl-4"><div class="card h-100"><div class="card-body">
+          <p class="card-title">Income vs basic needs</p><div class="card-sub">Click to filter</div>
+          <div class="chart" id="chIncome"></div></div></div></div>
+        <div class="col-md-6 col-xl-4"><div class="card h-100"><div class="card-body">
+          <p class="card-title">Income sources</p><div class="card-sub">Multiple answers allowed. Click to filter</div>
+          <div class="chart" id="chIncSrc"></div></div></div></div>
+        <div class="col-md-6 col-xl-4"><div class="card h-100"><div class="card-body">
+          <p class="card-title">Legal support needed: type</p><div class="card-sub">Multiple answers allowed. Click to filter</div>
+          <div class="chart" id="chLegal"></div></div></div></div>
+        <div class="col-md-6 col-xl-4"><div class="card h-100"><div class="card-body">
+          <p class="card-title">Barriers to accessing services</p><div class="card-sub">Multiple answers allowed. Click to filter</div>
+          <div class="chart" id="chBarrier"></div></div></div></div>
+        <div class="col-md-6 col-xl-4"><div class="card h-100"><div class="card-body">
+          <p class="card-title">MHPSS services requested</p><div class="card-sub">Click to filter</div>
+          <div class="chart" id="chMhpss"></div></div></div></div>
+      </div>
+
+      <div class="card mt-3">
+        <div class="card-body pb-2 d-flex flex-wrap justify-content-between align-items-end gap-2">
+          <div><p class="card-title">Household records</p><div class="card-sub">Filtered by everything above. Use the dropdowns under each column header to filter further.</div></div>
+          <div class="d-flex gap-2">
+            <input class="form-control form-control-sm" id="searchNA" placeholder="Search all columns" style="max-width:220px">
+            <button class="btn btn-sm btn-outline-secondary text-nowrap" id="clearNA">Clear table filters</button>
+            <button class="btn btn-sm btn-outline-secondary text-nowrap" id="dlNA">Download CSV</button>
+          </div>
+        </div>
+        <div id="tblNA"></div>
+      </div>
+    </div>
+
+    <!-- ============ REFERRALS ============ -->
+    <div class="tab-pane fade" id="tabRef">
+      <div class="filter-row">
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+          <select class="form-select form-select-sm w-auto" id="fRefYear"><option value="">All years</option></select>
+          <select class="form-select form-select-sm w-auto" id="fRefMonth"><option value="">All months</option></select>
+          <button class="btn btn-sm btn-link text-decoration-none" id="resetRef">Reset filters</button>
+          <span id="chipsRef"></span>
+        </div>
+      </div>
+      <div class="row g-3" id="kpisRef"></div>
+      <div class="row g-3 mt-0">
+        <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+          <p class="card-title">Referrals by type</p><div class="card-sub">Number of referrals. Click to filter</div>
+          <div class="chart" id="chRefType"></div></div></div></div>
+        <div class="col-lg-6"><div class="card h-100"><div class="card-body">
+          <p class="card-title">Referrals per month</p><div class="card-sub">Rows with no date are left out</div>
+          <div class="chart" id="chRefMonth"></div></div></div></div>
+        <div class="col-lg-7"><div class="card h-100"><div class="card-body">
+          <p class="card-title">Top organisations referred to</p><div class="card-sub">Number of referrals. Click to filter</div>
+          <div class="chart tall" id="chRefOrg"></div></div></div></div>
+        <div class="col-lg-5"><div class="card h-100"><div class="card-body">
+          <p class="card-title">Organisation type</p><div class="card-sub">Click to filter</div>
+          <div class="chart tall" id="chRefOrgType"></div></div></div></div>
+      </div>
+      <div class="card mt-3">
+        <div class="card-body pb-2 d-flex flex-wrap justify-content-between align-items-end gap-2">
+          <div><p class="card-title">Referral records</p><div class="card-sub">Use the dropdowns under each column header to filter</div></div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-secondary text-nowrap" id="clearRef">Clear table filters</button>
+            <button class="btn btn-sm btn-outline-secondary text-nowrap" id="dlRef">Download CSV</button>
+          </div>
+        </div>
+        <div id="tblRef"></div>
+      </div>
+    </div>
+
+    <!-- ============ FGD ============ -->
+    <div class="tab-pane fade" id="tabFGD">
+      <div class="row g-3 mt-1" id="kpisFGD"></div>
+      <div class="row g-3 mt-0">
+        <div class="col-lg-4"><div class="card h-100"><div class="card-body">
+          <p class="card-title">Gender of individuals</p><div class="card-sub">All focus groups combined</div>
+          <div class="chart tall" id="chFGDGender"></div></div></div></div>
+        <div class="col-lg-8"><div class="card h-100"><div class="card-body">
+          <p class="card-title">Individuals per focus group</p><div class="card-sub">Female and male individuals</div>
+          <div class="chart tall" id="chFGD"></div></div></div></div>
+      </div>
+      <div class="card mt-3"><div class="card-body pb-2">
+        <p class="card-title">Focus group records</p></div>
+        <div id="tblFGD"></div></div>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+
+<!-- Raw sheet rows (same shape SheetJS produces from the cleaned workbook) -->
+<script id="rawData" type="application/json">{"Needs Assessment - Full":[{"Assessment Date":"2025-10-25","Country":"Lebanon","Health Issues":"No","Health/MHPSS Need (merged)":"Yes","MHPSS Follow-up (Other)":"Yes","Income vs Basic Needs":"Does not meet needs","Income Sources":"Daily/weekly work","Legal Support Needed":"No","MHPSS Services Requested":"Yes - me & other members","Barriers to Services":"No","Protection Concern (Fear/Security)":"No","HoH Gender":"Female"},{"Assessment Date":"2025-10-26","Country":"Lebanon","Health Issues":"Yes","Treatment Ongoing":"No / partially","Health/MHPSS Need (merged)":"Yes","MHPSS Follow-up (Other)":"Yes","Income vs Basic Needs":"Does not meet needs","Income Sources":"Humanitarian assistance; Daily/weekly work; Seasonal work","Legal Support Needed":"Yes","Legal Support Type":"Inheritance","MHPSS Services Requested":"Yes - me & other members","Barriers to Services":"Yes","Barrier Types":"Cost; Fear/security; Disability access","Protection Concern (Fear/Security)":"Yes","HoH Gender":"Female"},{"Assessment Date":"2025-10-26","Country":"Lebanon","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"Yes","MHPSS Follow-up (Other)":"Yes","Income vs Basic Needs":"Does not meet needs","Income Sources":"Volunteer work; Employment - private sector","Legal Support Needed":"Yes","Legal Support Type":"Residency; Other","MHPSS Services Requested":"Yes - only me","Barriers to Services":"Yes","Barrier Types":"Fear/security; Other","Protection Concern (Fear/Security)":"Yes","HoH Gender":"Female","Notes (translated / details)":"Legal: Son needs help obtaining his school certificate from the Ministry of Education, refused because his residency expired.\nBarriers: Children missed education opportunities because their residency permits were lost."},{"Assessment Date":"2025-10-25","Country":"Lebanon","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"Yes","MHPSS Follow-up (Other)":"Yes","Income vs Basic Needs":"Does not meet needs","Income Sources":"Daily/weekly work","Legal Support Needed":"No","MHPSS Services Requested":"Yes - me & other members","Barriers to Services":"Yes","Barrier Types":"Fear/security; Lack of information","Protection Concern (Fear/Security)":"Yes","HoH Gender":"Male"},{"Assessment Date":"2025-10-25","Country":"Lebanon","Health Issues":"Yes","Treatment Ongoing":"No / partially","Health/MHPSS Need (merged)":"Yes","MHPSS Follow-up (Other)":"Yes","Income vs Basic Needs":"Does not meet needs","Income Sources":"Daily/weekly work; Seasonal work; Other","Legal Support Needed":"No","MHPSS Services Requested":"Yes - only me","Barriers to Services":"Yes","Barrier Types":"Cost; Fear/security; Lack of trust","Protection Concern (Fear/Security)":"Yes","HoH Gender":"Female","Notes (translated / details)":"Income: Income from MHPSS initiatives for families; writes stories about children of the missing - income depends on funding."},{"Assessment Date":"2025-10-26","Country":"Lebanon","Health Issues":"No","Health/MHPSS Need (merged)":"No","MHPSS Follow-up (Other)":"No","Income vs Basic Needs":"Meets needs","Income Sources":"Daily/weekly work; Volunteer work","Legal Support Needed":"Yes","Legal Support Type":"Inheritance","MHPSS Services Requested":"Yes - me & other members","Barriers to Services":"Yes","Barrier Types":"Fear/security; Stigma","Protection Concern (Fear/Security)":"Yes","HoH Gender":"Female","Notes (translated / details)":"HoH: She considers herself head of household; her husband lives in the USA and visits periodically (Syrian activist)."},{"Assessment Date":"2025-10-26","Country":"Lebanon","Health Issues":"Yes","Treatment Ongoing":"No / partially","Health/MHPSS Need (merged)":"Yes","MHPSS Follow-up (Other)":"Yes","Income vs Basic Needs":"Does not meet needs","Income Sources":"Humanitarian assistance; Daily/weekly work","Legal Support Needed":"Yes","Legal Support Type":"Asylum seeker certificate","MHPSS Services Requested":"Yes - only me","Barriers to Services":"Yes","Barrier Types":"Cost; Fear/security; Lack of trust; Stigma; Disability access","Protection Concern (Fear/Security)":"Yes","HoH Gender":"Female"},{"Assessment Date":"2026-02-04","Country":"Syria","Health Issues":"No","Health/MHPSS Need (merged)":"No","Income vs Basic Needs":"Does not meet needs","Income Sources":"Daily/weekly work","Legal Support Needed":"Yes","Legal Support Type":"Inheritance","MHPSS Services Requested":"No","Barriers to Services":"Yes","Barrier Types":"Distance","Protection Concern (Fear/Security)":"No","HoH Gender":"Male"},{"Assessment Date":"2026-02-10","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"No / partially","Health/MHPSS Need (merged)":"Yes","Income vs Basic Needs":"Does not meet needs","Income Sources":"Daily/weekly work; Support from family/friends","Legal Support Needed":"Yes","Legal Support Type":"Death certificate; Inheritance; Identification documents","MHPSS Services Requested":"No","Barriers to Services":"Yes","Barrier Types":"Cost","Protection Concern (Fear/Security)":"No","HoH Gender":"Female","Notes (translated / details)":"Income: A friend helped pay the rent for several months."},{"Assessment Date":"2026-02-04","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"No","Income vs Basic Needs":"Does not meet needs","Income Sources":"Employment - private sector","Legal Support Needed":"Yes","Legal Support Type":"Registering children","MHPSS Services Requested":"No","Barriers to Services":"Yes","Barrier Types":"Cost; Distance","Protection Concern (Fear/Security)":"No","HoH Gender":"Female"},{"Assessment Date":"2026-11-03","Country":"Turkey","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"No","Income vs Basic Needs":"Does not meet needs","Income Sources":"No income - relies on debt/support","Legal Support Needed":"No","MHPSS Services Requested":"No","Barriers to Services":"Yes","Barrier Types":"Cost","Protection Concern (Fear/Security)":"No","HoH Gender":"Male","Notes (translated / details)":"Income: Worked at a tailoring factory in Istanbul for 1 year, stopped last year; currently relies on borrowing."},{"Assessment Date":"2026-04-24","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"No","Income vs Basic Needs":"Meets needs","Income Sources":"Daily/weekly work; Employment - public sector; Employment - private sector","Legal Support Needed":"No","MHPSS Services Requested":"No","Barriers to Services":"Yes","Barrier Types":"Cost","Protection Concern (Fear/Security)":"No","HoH Gender":"Male"},{"Assessment Date":"2026-02-05","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"No","Income vs Basic Needs":"Meets needs","Income Sources":"Employment - public sector","Legal Support Needed":"No","MHPSS Services Requested":"No","Barriers to Services":"Yes","Barrier Types":"Lack of information","Protection Concern (Fear/Security)":"No","HoH Gender":"Female"},{"Assessment Date":"2026-02-05","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"No","MHPSS Follow-up (Other)":"No","Income vs Basic Needs":"Does not meet needs","Income Sources":"Daily/weekly work; Seasonal work; Employment - private sector","Legal Support Needed":"Yes","Legal Support Type":"Death certificate; Missing person's properties","MHPSS Services Requested":"Yes - me & other members","Barriers to Services":"Yes","Barrier Types":"Cost; Distance; Lack of information","Protection Concern (Fear/Security)":"No","HoH Gender":"Female","Notes (translated / details)":"Income: Son works at Al-Shami coffee company and is also a trainer; daughter Rama studies tourism and photographs events (irregular income)."},{"Assessment Date":"2026-05-05","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"No / partially","Health/MHPSS Need (merged)":"Yes","Income vs Basic Needs":"Does not meet needs","Income Sources":"No income - relies on debt/support","Legal Support Needed":"Yes","Legal Support Type":"Registering children","MHPSS Services Requested":"No","Barriers to Services":"Yes","Barrier Types":"Cost","Protection Concern (Fear/Security)":"No","HoH Gender":"Female"},{"Assessment Date":"2026-08-04","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"No","Income vs Basic Needs":"Meets needs","Income Sources":"Support from family/friends","Legal Support Needed":"No","MHPSS Services Requested":"No","Barriers to Services":"Yes","Barrier Types":"Distance; Other","Protection Concern (Fear/Security)":"No","HoH Gender":"Female","Notes (translated / details)":"Income: Her daughter Rojin helps sometimes, but with difficulty.\nBarriers: Re-experiencing trauma (re-traumatisation)."},{"Assessment Date":"2026-04-06","Country":"Syria","Health Issues":"No","Health/MHPSS Need (merged)":"No","Income vs Basic Needs":"Does not meet needs","Income Sources":"No income - relies on debt/support","Legal Support Needed":"Yes","Legal Support Type":"Identification documents","MHPSS Services Requested":"No","Barriers to Services":"Yes","Barrier Types":"Cost","Protection Concern (Fear/Security)":"No","HoH Gender":"Male"},{"Assessment Date":"2026-09-16","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"No","MHPSS Follow-up (Other)":"No","Income vs Basic Needs":"Does not meet needs","Income Sources":"Seasonal work; No income - relies on debt/support","Legal Support Needed":"No","MHPSS Services Requested":"No","Barriers to Services":"Yes","Barrier Types":"Cost; Distance; Fear/security; Disability access","Protection Concern (Fear/Security)":"Yes","HoH Gender":"Male"},{"Assessment Date":"2026-09-17","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"Yes","MHPSS Follow-up (Other)":"Yes","Income vs Basic Needs":"Does not meet needs","Income Sources":"Humanitarian assistance; Business owner","Legal Support Needed":"No","MHPSS Services Requested":"No","Barriers to Services":"Yes","Barrier Types":"Cost; Distance; Disability access","Protection Concern (Fear/Security)":"No","HoH Gender":"Female"},{"Assessment Date":"2026-09-18","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"No","MHPSS Follow-up (Other)":"No","Income vs Basic Needs":"Does not meet needs","Income Sources":"Daily/weekly work","Legal Support Needed":"Yes","Legal Support Type":"Inheritance; Other","MHPSS Services Requested":"No","Barriers to Services":"Yes","Barrier Types":"Cost; Distance; Lack of information; Lack of trust","Protection Concern (Fear/Security)":"No","HoH Gender":"Female","Notes (translated / details)":"Income: Household supports the brother's family; a small UNICEF allowance for them stopped in 2025.\nLegal: Legal support to remove the brother's name from the terrorism list (added by the previous government)."},{"Assessment Date":"2026-09-21","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"No","MHPSS Follow-up (Other)":"No","Income vs Basic Needs":"Meets needs","Income Sources":"Employment - public sector","Legal Support Needed":"No","MHPSS Services Requested":"No","Barriers to Services":"No","Protection Concern (Fear/Security)":"No","HoH Gender":"Male"},{"Assessment Date":"2026-09-22","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"No","MHPSS Follow-up (Other)":"No","Income vs Basic Needs":"Does not meet needs","Income Sources":"Daily/weekly work","Legal Support Needed":"Yes","Legal Support Type":"Inheritance","MHPSS Services Requested":"Yes - me & other members","Barriers to Services":"No","Protection Concern (Fear/Security)":"No","HoH Gender":"Male"},{"Assessment Date":"2026-09-24","Country":"Jordan","Health Issues":"Yes","Treatment Ongoing":"No / partially","Health/MHPSS Need (merged)":"Yes","Income vs Basic Needs":"Does not meet needs","Income Sources":"No income - relies on debt/support","Legal Support Needed":"Yes","Legal Support Type":"Work permit; Eviction from residence","MHPSS Services Requested":"No","Barriers to Services":"Yes","Barrier Types":"Cost; Lack of trust","Protection Concern (Fear/Security)":"No","HoH Gender":"Male"},{"Assessment Date":"2026-09-25","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"No","MHPSS Follow-up (Other)":"No","Income vs Basic Needs":"Does not meet needs","Income Sources":"Daily/weekly work; Employment - private sector","Legal Support Needed":"No","MHPSS Services Requested":"Yes - only me","Barriers to Services":"Yes","Barrier Types":"Cost; Distance; Lack of information; Stigma","Protection Concern (Fear/Security)":"No","HoH Gender":"Male"},{"Assessment Date":"2026-09-28","Country":"Syria","Health Issues":"Yes","Treatment Ongoing":"Yes","Health/MHPSS Need (merged)":"No","MHPSS Follow-up (Other)":"No","Income vs Basic Needs":"Meets needs","Income Sources":"Employment - public sector","Legal Support Needed":"No","MHPSS Services Requested":"Yes - only me","Barriers to Services":"Yes","Barrier Types":"Cost; Distance; Lack of information","Protection Concern (Fear/Security)":"No","HoH Gender":"Female"}],"Quick Needs Assessment":[{"Assessment Date":"2026-09-22","Country":"Syria","Head of Household":"Me","HoH Gender":"Male","Protection Concerns":"Yes","Health Issues":"Yes","Income Sufficient":"No","Income Sources":"Daily/weekly work; Seasonal work","Legal Support Needed":"No"},{"Assessment Date":"2026-09-23","Country":"Syria","Head of Household":"Me","HoH Gender":"Male","Protection Concerns":"No","Health Issues":"No","Income Sufficient":"No","Income Sources":"Employment - private sector","Legal Support Needed":"No"},{"Assessment Date":"2026-09-24","Country":"Syria","Head of Household":"My father","HoH Gender":"Male","Protection Concerns":"No","Health Issues":"No","Income Sufficient":"No","Income Sources":"Daily/weekly work","Legal Support Needed":"No"}],"Focus Group Discussions":[{"#":1,"FGD ID":"PING0001400","Male Participants":1,"Female Participants":0,"Total Participants":1},{"#":2,"FGD ID":"PING0001368","Male Participants":8,"Female Participants":9,"Total Participants":17},{"#":3,"FGD ID":"PING0001340","Male Participants":2,"Female Participants":16,"Total Participants":18},{"#":4,"FGD ID":"PING0001284","Male Participants":1,"Female Participants":6,"Total Participants":7},{"#":5,"FGD ID":"PING0001285","Male Participants":7,"Female Participants":0,"Total Participants":7},{"#":6,"FGD ID":"PING0001282","Male Participants":9,"Female Participants":1,"Total Participants":10},{"#":7,"FGD ID":"PING0001281","Male Participants":1,"Female Participants":0,"Total Participants":1},{"#":8,"FGD ID":"PING0001279","Male Participants":3,"Female Participants":7,"Total Participants":10},{"#":9,"FGD ID":"PING0001280","Male Participants":2,"Female Participants":9,"Total Participants":11},{"#":10,"FGD ID":"PING0001283","Male Participants":5,"Female Participants":5,"Total Participants":10},{"#":11,"FGD ID":"PING0001286","Male Participants":1,"Female Participants":14,"Total Participants":15},{"FGD ID":"Total","Male Participants":40,"Female Participants":67,"Total Participants":107}],"Referrals":[{"Organisation":"Lebanese Center for Human Rights","Organisation Type":"Regional Organizations","Referral Date":"2025-12-16","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"INTERSOS","Organisation Type":"International Organizations","Referral Date":"2025-11-05","Referral Type":"MHPSS","No. of Individuals":1},{"Organisation":"INTERSOS","Organisation Type":"International Organizations","Referral Date":"2025-11-05","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Endless Medical Advantage (EMA)","Organisation Type":"Regional Organizations","Referral Date":"2025-12-02","Referral Type":"Health","No. of Individuals":1},{"Organisation":"INTERSOS","Organisation Type":"International Organizations","Referral Date":"2025-11-06","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Lebanese Center for Human Rights","Organisation Type":"Regional Organizations","Referral Date":"2025-12-16","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"Lebanese Center for Human Rights","Organisation Type":"Regional Organizations","Referral Date":"2025-12-16","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"INTERSOS","Organisation Type":"International Organizations","Referral Date":"2025-11-06","Referral Type":"Protection/case management","No. of Individuals":1},{"Referral Date":"2025-10-30","Referral Type":"Durable Solutions/Return programs","No. of Individuals":1},{"Organisation":"INTERSOS","Organisation Type":"International Organizations","Referral Date":"2025-11-06","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"Lebanese Center for Human Rights","Organisation Type":"Regional Organizations","Referral Date":"2025-12-16","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"Oxfam International","Organisation Type":"International Organizations","Referral Date":"2025-08-05","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Women Now For Development","Organisation Type":"Regional Organizations","Referral Date":"2025-11-19","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Oxfam International","Organisation Type":"International Organizations","Referral Date":"2025-08-05","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Women Now For Development","Organisation Type":"Regional Organizations","Referral Date":"2025-11-19","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Nophotozone","Organisation Type":"Regional Organizations","Referral Date":"2025-08-22","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"Mizan Organization for Legal Studies","Organisation Type":"Regional Organizations","Referral Date":"2025-12-02","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"Oxfam International","Organisation Type":"International Organizations","Referral Date":"2025-10-07","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"International Medical Corps (IMC)","Organisation Type":"International Organizations","Referral Date":"2025-11-19","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Molham Team","Organisation Type":"Regional Organizations","Referral Date":"2025-12-03","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Médecins Sans Frontières (MSF)","Organisation Type":"International Organizations","Referral Date":"2025-11-10","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Women Now For Development","Organisation Type":"Regional Organizations","Referral Date":"2025-11-19","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Amel Association","Organisation Type":"Regional Organizations","Referral Date":"2026-01-08","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"International Orthodox Christian Charities (IOCC)","Organisation Type":"International Organizations","Referral Date":"2026-01-29","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Turkish Red Crescent (TRC)","Organisation Type":"Regional Organizations","Referral Date":"2026-03-24","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Danish Refugee Council (DRC)","Organisation Type":"International Organizations","Referral Date":"2026-04-17","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Greek Orthodox Patriarchate of Antioch and All the East (GOPA-DERD)","Organisation Type":"Regional Organizations","Referral Date":"2025-10-08","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Qaderoon","Organisation Type":"Regional Organizations","Referral Date":"2025-10-08","Referral Type":"Education","No. of Individuals":1},{"Organisation":"International Medical Corps (IMC)","Organisation Type":"International Organizations","Referral Date":"2025-12-28","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Medical Human Association-Ahmad Project under Medecins Pour Tous","Organisation Type":"Regional Organizations","Referral Date":"2026-02-05","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Oxfam International","Organisation Type":"International Organizations","Referral Date":"2026-01-20","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Accountability to Affected Populations Working Group (AAP)","Organisation Type":"International Organizations","Referral Date":"2026-03-16","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Oxfam International","Organisation Type":"International Organizations","Referral Date":"2026-01-20","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"United Nations Population Fund (UNFPA)","Organisation Type":"International Organizations","Referral Date":"2026-03-23","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Medical Human Association-Ahmad Project under Medecins Pour Tous","Organisation Type":"Regional Organizations","Referral Date":"2026-02-06","Referral Type":"Health","No. of Individuals":2},{"Organisation":"Syrian Arab Red Crescent (SARC)","Organisation Type":"Regional Organizations","Referral Date":"2026-01-31","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Syrian Arab Red Crescent (SARC)","Organisation Type":"Regional Organizations","Referral Date":"2026-01-31","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"United Nations High Commissioner for Refugees (UNHCR)","Organisation Type":"International Organizations","Referral Date":"2026-02-04","Referral Type":"Durable Solutions/Return programs","No. of Individuals":1},{"Organisation":"Syrian Arab Red Crescent (SARC)","Organisation Type":"Regional Organizations","Referral Date":"2026-02-04","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"Médecins Sans Frontières (MSF)","Organisation Type":"International Organizations","Referral Date":"2026-02-17","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Oxfam International","Organisation Type":"International Organizations","Referral Date":"2025-08-05","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Médecins Sans Frontières (MSF)","Organisation Type":"International Organizations","Referral Date":"2026-02-17","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Jiyan Foundation For Human Rights","Organisation Type":"Regional Organizations","Referral Date":"2025-12-16","Referral Type":"MHPSS","No. of Individuals":1},{"Organisation":"Syria Al Yamama Charity Association (SYCA)","Organisation Type":"Regional Organizations","Referral Date":"2026-05-28","Referral Type":"MHPSS","No. of Individuals":1},{"Organisation":"Oxfam International","Organisation Type":"International Organizations","Referral Date":"2026-01-20","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Accountability to Affected Populations Working Group (AAP)","Organisation Type":"International Organizations","Referral Date":"2026-04-12","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Child Houses","Organisation Type":"Regional Organizations","Referral Date":"2025-12-09","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Oxfam International","Organisation Type":"International Organizations","Referral Date":"2026-01-20","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Caritas Syria","Organisation Type":"Regional Organizations","Referral Date":"2026-06-01","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"Syrian Society for Social Development (SSSD)","Organisation Type":"Regional Organizations","Referral Date":"2026-06-01","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"Syrian Arab Red Crescent (SARC)","Organisation Type":"Regional Organizations","Referral Date":"2026-03-24","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"Syrian Arab Red Crescent (SARC)","Organisation Type":"Regional Organizations","Referral Date":"2026-03-25","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"Accountability to Affected Populations Working Group (AAP)","Organisation Type":"International Organizations","Referral Date":"2026-04-07","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"Accountability to Affected Populations Working Group (AAP)","Organisation Type":"International Organizations","Referral Date":"2026-04-09","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"United Nations Development Programme (UNDP)","Organisation Type":"International Organizations","Referral Date":"2026-06-14","Referral Type":"MHPSS","No. of Individuals":1},{"Organisation":"Ministry of Health (Syria)","Organisation Type":"Government","Referral Date":"2026-04-08","Referral Type":"Health","No. of Individuals":1},{"Organisation":"United Nations Development Programme (UNDP)","Organisation Type":"International Organizations","Referral Date":"2026-04-08","Referral Type":"MHPSS","No. of Individuals":1},{"Organisation":"Norwegian Refugee Council (NRC)","Organisation Type":"International Organizations","Referral Date":"2026-05-05","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"Syrian Arab Red Crescent (SARC)","Organisation Type":"Regional Organizations","Referral Date":"2026-06-15","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"United Nations Development Programme (UNDP)","Organisation Type":"International Organizations","Referral Date":"2026-04-24","Referral Type":"MHPSS","No. of Individuals":1},{"Organisation":"United Nations Development Programme (UNDP)","Organisation Type":"International Organizations","Referral Date":"2026-04-26","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"United Nations Development Programme (UNDP)","Organisation Type":"International Organizations","Referral Date":"2026-04-26","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"Norwegian Refugee Council (NRC)","Organisation Type":"International Organizations","Referral Date":"2026-06-09","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"United Nations Development Programme (UNDP)","Organisation Type":"International Organizations","Referral Date":"2026-04-26","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"United Nations Development Programme (UNDP)","Organisation Type":"International Organizations","Referral Date":"2026-04-26","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"Norwegian Refugee Council (NRC)","Organisation Type":"International Organizations","Referral Date":"2026-05-04","Referral Type":"Housing/shelter/infrastructure","No. of Individuals":1},{"Organisation":"Norwegian Refugee Council (NRC)","Organisation Type":"International Organizations","Referral Date":"2026-05-03","Referral Type":"Housing/shelter/infrastructure","No. of Individuals":1},{"Organisation":"Syria Community Consortium (SCC)","Organisation Type":"Regional Organizations","Referral Date":"2026-04-29","Referral Type":"Protection/case management","No. of Individuals":15},{"Organisation":"United Nations Population Fund (UNFPA)","Organisation Type":"International Organizations","Referral Date":"2026-06-09","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"International Organization for Migration (IOM) - Türkiye","Organisation Type":"International Organizations","Referral Date":"2026-06-01","Referral Type":"Housing/shelter/infrastructure","No. of Individuals":1},{"Organisation":"Shafak Organisation","Organisation Type":"Regional Organizations","Referral Date":"2026-07-13","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"Caritas Switzerland","Organisation Type":"International Organizations","Referral Date":"2026-06-30","Referral Type":"Economic/Vocational training","No. of Individuals":21},{"Organisation":"Al Baraa for Legal Consulting","Organisation Type":"Individual Expert","Referral Date":"2026-05-22","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"Caritas Switzerland","Organisation Type":"International Organizations","Referral Date":"2026-07-06","Referral Type":"Economic/Vocational training","No. of Individuals":18},{"Organisation":"Mari Research and Development","Organisation Type":"Regional Organizations","Referral Date":"2026-07-06","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"Syrian Arab Red Crescent (SARC)","Organisation Type":"Regional Organizations","Referral Date":"2026-08-10","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Arcenciel","Organisation Type":"Regional Organizations","Referral Date":"2026-04-01","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"Caritas Switzerland","Organisation Type":"International Organizations","Referral Date":"2026-07-30","Referral Type":"Economic/Vocational training","No. of Individuals":3},{"Organisation":"Médecins Sans Frontières (MSF)","Organisation Type":"International Organizations","Referral Date":"2026-07-20","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Médecins Sans Frontières (MSF)","Organisation Type":"International Organizations","Referral Date":"2026-07-20","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Médecins Sans Frontières (MSF)","Organisation Type":"International Organizations","Referral Date":"2026-07-20","Referral Type":"Health","No. of Individuals":1},{"Organisation":"Médecins Sans Frontières (MSF)","Organisation Type":"International Organizations","Referral Date":"2026-08-09","Referral Type":"Health","No. of Individuals":1},{"Organisation":"United Nations High Commissioner for Refugees (UNHCR)","Organisation Type":"International Organizations","Referral Date":"2026-08-12","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"Save the Children Jordan","Organisation Type":"International Organizations","Referral Date":"2026-08-13","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"Norwegian Refugee Council (NRC)","Organisation Type":"International Organizations","Referral Date":"2026-09-18","Referral Type":"Legal"},{"Organisation":"Norwegian Refugee Council (NRC)","Organisation Type":"International Organizations","Referral Date":"2026-09-18","Referral Type":"Education"},{"Organisation":"Mari Research and Development","Organisation Type":"Regional Organizations","Referral Date":"2026-09-22","Referral Type":"Legal"},{"Organisation":"Norwegian Refugee Council (NRC)","Organisation Type":"International Organizations","Referral Date":"2026-09-22","Referral Type":"Legal"},{"Organisation":"Syrian Arab Red Crescent (SARC)","Organisation Type":"Regional Organizations","Referral Date":"2026-09-24","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"United Nations Development Programme (UNDP)","Organisation Type":"International Organizations","Referral Date":"2026-09-28","Referral Type":"MHPSS"},{"Organisation":"Alawite Islamic Charity Association (AICA)","Organisation Type":"Regional Organizations","Referral Date":"2026-09-30","Referral Type":"Health","No. of Individuals":1},{"Organisation":"World Food Programme (WFP)","Organisation Type":"International Organizations","Referral Date":"2026-09-15","Referral Type":"Other","No. of Individuals":1},{"Organisation":"United Nations High Commissioner for Refugees (UNHCR)","Organisation Type":"International Organizations","Referral Date":"2026-10-14","Referral Type":"Durable Solutions/Return programs","No. of Individuals":1},{"Organisation":"King Hussein Foundation","Organisation Type":"Regional Organizations","Referral Date":"2026-10-14","Referral Type":"Health","No. of Individuals":1},{"Organisation":"King Hussein Foundation","Organisation Type":"Regional Organizations","Referral Date":"2026-10-14","Referral Type":"MHPSS","No. of Individuals":1},{"Organisation":"The Center for Victims of Torture (CVT)","Organisation Type":"International Organizations","Referral Date":"2026-10-14","Referral Type":"MHPSS","No. of Individuals":1},{"Organisation":"INTERSOS","Organisation Type":"International Organizations","Referral Date":"2026-10-14","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Arab Renaissance for Democracy & Development (ARDD)","Organisation Type":"Regional Organizations","Referral Date":"2026-10-14","Referral Type":"Housing/shelter/infrastructure","No. of Individuals":1},{"Organisation":"United Nations Development Programme (UNDP)","Organisation Type":"International Organizations","Referral Date":"2026-09-28","Referral Type":"MHPSS"},{"Organisation":"Caritas Switzerland","Organisation Type":"International Organizations","Referral Date":"2026-08-21","Referral Type":"Economic/Vocational training","No. of Individuals":2},{"Organisation":"Mari Research and Development","Organisation Type":"Regional Organizations","Referral Date":"2026-10-19","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Organisation":"Greek Orthodox Patriarchate of Antioch and All the East (GOPA-DERD)","Organisation Type":"Regional Organizations","Referral Date":"2026-10-19","Referral Type":"Economic/Vocational training"},{"Organisation":"Greek Orthodox Patriarchate of Antioch and All the East (GOPA-DERD)","Organisation Type":"Regional Organizations","Referral Date":"2026-10-19","Referral Type":"Economic/Vocational training"},{"Organisation":"Union of Relief and Development Associations (URDA)","Organisation Type":"Regional Organizations","Referral Date":"2026-08-31","Referral Type":"Economic/Vocational training","No. of Individuals":5},{"Organisation":"Violet","Organisation Type":"Regional Organizations","Referral Date":"2026-02-16","Referral Type":"Economic/Vocational training","No. of Individuals":1},{"Referral Type":"Protection/case management","No. of Individuals":2},{"Organisation":"Violet","Organisation Type":"Regional Organizations","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Shafak Organisation","Organisation Type":"Regional Organizations","Referral Type":"Legal","No. of Individuals":1},{"Organisation":"Violet","Organisation Type":"Regional Organizations","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"Violet","Organisation Type":"Regional Organizations","Referral Type":"Protection/case management","No. of Individuals":1},{"Organisation":"El Furat","Organisation Type":"Families Association","Referral Type":"Protection/case management","No. of Individuals":7},{"Organisation":"Greek Orthodox Patriarchate of Antioch and All the East (GOPA-DERD)","Organisation Type":"Regional Organizations","Referral Date":"2026-10-19","Referral Type":"Health"},{"Organisation":"Greek Orthodox Patriarchate of Antioch and All the East (GOPA-DERD)","Organisation Type":"Regional Organizations","Referral Date":"2026-10-19","Referral Type":"Health"}]}</script>
+<!-- Country reference points (GeoJSON). Data has country only, so markers sit around these centres. -->
+<script id="geoData" type="application/json">
+{"type":"FeatureCollection","features":[
+ {"type":"Feature","properties":{"country":"Lebanon"},"geometry":{"type":"Point","coordinates":[35.86,33.87]}},
+ {"type":"Feature","properties":{"country":"Syria"},"geometry":{"type":"Point","coordinates":[38.6,34.9]}},
+ {"type":"Feature","properties":{"country":"Turkey"},"geometry":{"type":"Point","coordinates":[35.2,39.0]}},
+ {"type":"Feature","properties":{"country":"Jordan"},"geometry":{"type":"Point","coordinates":[36.3,31.2]}}
+]}
+</script>
+
+<script>
+'use strict';
+const SHEETS = { full: 'Needs Assessment - Full', quick: 'Quick Needs Assessment', fgd: 'Focus Group Discussions', ref: 'Referrals' };
+const GEO = JSON.parse(document.getElementById('geoData').textContent);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const split = v => v ? String(v).split(';').map(s => s.trim()).filter(Boolean) : [];
+const pct = (a, b) => b ? Math.round(100 * a / b) : 0;
+
+function toISO(v) {
+  if (v == null || v === '') return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  if (typeof v === 'number') return new Date(Math.round((v - 25569) * 864e5)).toISOString().slice(0, 10);
+  const s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);   // m/d/yyyy text dates
+  return m ? `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}` : null;
+}
+const yn = v => (v === 'Yes' || v === 'No') ? v : null;
+
+// Organisation types: international CSOs + IOs merged; "CSO" dropped from names
+const ORG_TYPE = { 'CSO (International)': 'International Organizations', 'International Organisation': 'International Organizations',
+  'CSO (Regional)': 'Regional Organizations' };
+const orgTypeName = v => v ? (ORG_TYPE[v] || v) : '(Not recorded)';
+
+// ---------- normalise raw sheet rows into one household list + referrals + FGDs
+function normalise(raw) {
+  const hh = [];
+  (raw[SHEETS.full] || []).forEach((r, i) => hh.push({
+    id: 'F' + String(i + 1).padStart(3, '0'), form: 'Full',
+    date: toISO(r['Assessment Date']), country: r['Country'] || 'Unknown', gender: r['HoH Gender'] || null,
+    hoh: null,
+    health: yn(r['Health Issues']), treatment: r['Treatment Ongoing'] || null,
+    healthNeed: yn(r['Health/MHPSS Need (merged)']), mhFollow: yn(r['MHPSS Follow-up (Other)']),
+    income: r['Income vs Basic Needs'] || null, incSrc: split(r['Income Sources']),
+    legal: yn(r['Legal Support Needed']), legalType: split(r['Legal Support Type']),
+    mhpss: r['MHPSS Services Requested'] || null,
+    barriers: yn(r['Barriers to Services']), barrierType: split(r['Barrier Types']),
+    protection: yn(r['Protection Concern (Fear/Security)']),
+    notes: r['Notes (translated / details)'] || ''
+  }));
+  (raw[SHEETS.quick] || []).forEach((r, i) => hh.push({
+    id: 'Q' + String(i + 1).padStart(3, '0'), form: 'Quick',
+    date: toISO(r['Assessment Date']), country: r['Country'] || 'Unknown', gender: r['HoH Gender'] || null,
+    hoh: r['Head of Household'] || null,
+    health: yn(r['Health Issues']), treatment: null, healthNeed: null, mhFollow: null,
+    income: r['Income Sufficient'] === 'No' ? 'Does not meet needs' : r['Income Sufficient'] === 'Yes' ? 'Meets needs' : null,
+    incSrc: split(r['Income Sources']),
+    legal: yn(r['Legal Support Needed']), legalType: split(r['Legal Support Type']),
+    mhpss: null, barriers: null, barrierType: [],
+    protection: yn(r['Protection Concerns']), notes: ''
+  }));
+  const ref = (raw[SHEETS.ref] || []).map((r, i) => ({
+    id: i + 1, org: r['Organisation'] || '(Not recorded)', orgType: orgTypeName(r['Organisation Type']),
+    date: toISO(r['Referral Date']), type: r['Referral Type'] || '(Not recorded)',
+    n: typeof r['No. of Individuals'] === 'number' ? r['No. of Individuals'] : null
+  }));
+  const fgd = (raw[SHEETS.fgd] || []).filter(r => r['FGD ID'] && r['FGD ID'] !== 'Total').map(r => {
+    const m = +r['Male Participants'] || 0, f = +r['Female Participants'] || 0;
+    return { id: r['FGD ID'], male: m, female: f, total: m + f };
+  });
+  return { hh, ref, fgd };
+}
+
+// ---------- state
+let DATA, NA = {}, RF = {};
+const charts = {};
+const NEED_DEFS = [
+  ['income', 'Not meeting basic needs', h => h.income ? h.income === 'Does not meet needs' : null],
+  ['healthNeed', 'Health/MHPSS need', h => h.healthNeed ? h.healthNeed === 'Yes' : null],
+  ['health', 'Health issues', h => h.health ? h.health === 'Yes' : null],
+  ['mhpss', 'MHPSS services requested', h => h.mhpss ? h.mhpss !== 'No' : null],
+  ['legal', 'Legal support needed', h => h.legal ? h.legal === 'Yes' : null],
+  ['barriers', 'Barriers to services', h => h.barriers ? h.barriers === 'Yes' : null],
+  ['protection', 'Protection concern (fear/security)', h => h.protection ? h.protection === 'Yes' : null],
+];
+const NA_DIMS = {
+  country: { label: 'Country', test: (h, v) => h.country === v },
+  gender: { label: 'HoH gender', test: (h, v) => h.gender === v },
+  form: { label: 'Form', test: (h, v) => h.form === v },
+  year: { label: 'Year', test: (h, v) => (h.date || '').startsWith(v) },
+  month: { label: 'Month', test: (h, v) => (h.date || '').slice(5, 7) === v },
+  need: { label: 'Answered Yes', test: (h, v) => NEED_DEFS.find(d => d[1] === v)[2](h) === true },
+  income: { label: 'Income', test: (h, v) => h.income === v },
+  incSrc: { label: 'Income source', test: (h, v) => h.incSrc.includes(v) },
+  legalType: { label: 'Legal type', test: (h, v) => h.legalType.includes(v) },
+  barrierType: { label: 'Barrier', test: (h, v) => h.barrierType.includes(v) },
+  mhpss: { label: 'MHPSS', test: (h, v) => h.mhpss === v },
+};
+const RF_DIMS = {
+  year: { label: 'Year', test: (r, v) => (r.date || '').startsWith(v) },
+  month: { label: 'Month', test: (r, v) => (r.date || '').slice(5, 7) === v },
+  type: { label: 'Referral type', test: (r, v) => r.type === v },
+  org: { label: 'Organisation', test: (r, v) => r.org === v },
+  orgType: { label: 'Org type', test: (r, v) => r.orgType === v },
+};
+const applyFilters = (rows, f, dims, skip) => rows.filter(r => Object.entries(f).every(([k, v]) => k === skip || v == null || v === '' || dims[k].test(r, v)));
+function toggle(state, key, val, render) { state[key] = state[key] === val ? null : val; syncSelects(); render(); }
+
+function syncSelects() {
+  document.getElementById('fCountry').value = NA.country || '';
+  document.getElementById('fGender').value = NA.gender || '';
+  document.getElementById('fForm').value = NA.form || '';
+  document.getElementById('fRefYear').value = RF.year || '';
+  document.getElementById('fYear').value = NA.year || '';
+  document.getElementById('fMonth').value = NA.month || '';
+  document.getElementById('fRefMonth').value = RF.month || '';
+}
+function chips(el, state, dims, render, selectKeys) {
+  el.innerHTML = '';
+  Object.entries(state).filter(([k, v]) => v && !selectKeys.includes(k)).forEach(([k, v]) => {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.innerHTML = `${esc(dims[k].label)}: ${esc(v)} <span aria-hidden="true">✕</span>`;
+    b.title = 'Remove filter'; b.onclick = () => { state[k] = null; render(); };
+    el.appendChild(b);
+  });
+}
+
+// ---------- chart helpers (single-series bars, color = blue; selected bar stays full, others fade)
+function baseOpt() {
+  return {
+    textStyle: { fontFamily: 'Lato, Segoe UI, Arial, sans-serif', color: css('--text-secondary') },
+    tooltip: { trigger: 'item', backgroundColor: css('--surface-1'), borderColor: css('--border'), textStyle: { color: css('--text-primary'), fontSize: 12 } },
+    animationDuration: 300,
+  };
+}
+function chart(id) {
+  if (!charts[id]) {
+    charts[id] = echarts.init(document.getElementById(id), null, { renderer: 'svg' });
+    new ResizeObserver(() => charts[id].resize()).observe(document.getElementById(id));
+  }
+  return charts[id];
+}
+function hbar(id, items, selected, onClick, opts = {}) {
+  // items: [{name, value, tip?}] already sorted; draws largest at top
+  const c = chart(id), data = items.slice().reverse();
+  const blue = css('--series-1'), faded = css('--seq-light');
+  c.setOption({
+    ...baseOpt(),
+    grid: { left: 8, right: 78, top: 6, bottom: 6, containLabel: true },
+    xAxis: { type: 'value', max: opts.max, show: false },
+    yAxis: { type: 'category', data: data.map(d => d.name), axisTick: { show: false }, axisLine: { show: false },
+      axisLabel: { color: css('--text-secondary'), fontSize: 12, width: 170, overflow: 'truncate' } },
+    tooltip: { ...baseOpt().tooltip, formatter: p => data[p.dataIndex].tip ||
+      `${esc(p.name)}<br><b>${p.value}</b> · ${pct(p.value, opts.total)}% of ${opts.total} ${opts.of || ''}` },
+    series: [{
+      type: 'bar', barMaxWidth: 18, barCategoryGap: '30%',
+      data: data.map(d => ({ value: d.value, itemStyle: { color: !selected || selected === d.name ? blue : faded, borderRadius: [0, 4, 4, 0] } })),
+      label: { show: true, position: 'right', fontSize: 11, formatter: p => data[p.dataIndex].label ?? `{n|${p.value}}  {p|${pct(p.value, opts.total)}%}`,
+        rich: { n: { color: css('--text-primary'), fontWeight: 700, fontSize: 11 }, p: { color: css('--text-muted'), fontSize: 11 } } },
+      emphasis: { focus: 'none' },
+    }],
+  }, true);
+  c.off('click'); c.on('click', p => onClick(p.name));
+}
+const answered = (rows, key) => rows.filter(r => Array.isArray(r[key]) ? r[key].length : r[key] != null).length;
+function countMulti(rows, key) {
+  const m = new Map();
+  rows.forEach(r => r[key].forEach(v => m.set(v, (m.get(v) || 0) + 1)));
+  return [...m].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+}
+function countOne(rows, fn) {
+  const m = new Map();
+  rows.forEach(r => { const v = fn(r); if (v != null) m.set(v, (m.get(v) || 0) + 1); });
+  return [...m].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+}
+function kpiShare(label, n, total, color, pctClass) {
+  const p = pct(n, total);
+  return `<div class="col-6 col-lg"><div class="card kpi h-100"><div class="card-body py-3">
+    <div class="lbl">${esc(label)}</div><div class="val">${n}<span class="pct ${pctClass || ''}">${p}%</span></div>
+    <div class="share" title="${p}% of ${total} individuals"><span style="width:${p}%;background:${color}"></span></div></div></div></div>`;
+}
+function kpi(label, val, sub) {
+  return `<div class="col-6 col-lg"><div class="card kpi h-100"><div class="card-body py-3">
+    <div class="lbl">${esc(label)}</div><div class="val">${val}</div><div class="sub">${sub || '&nbsp;'}</div></div></div></div>`;
+}
+
+// ---------- map
+let map, cluster, tiles;
+function initMap() {
+  map = L.map('map', { scrollWheelZoom: false, worldCopyJump: true }).setView([35.5, 37], 5);
+  setTiles();
+  cluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 50, iconCreateFunction: clusterIcon });
+  map.addLayer(cluster);
+}
+function setTiles() {
+  // Esri light grey basemap + labels: no API key, and works when the file is opened locally (file://)
+  const esri = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
+  tiles = L.tileLayer(esri + 'World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors', maxZoom: 12 }).addTo(map);
+  L.tileLayer(esri + 'World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 12, pane: 'overlayPane' }).addTo(map);
+}
+function clusterIcon(c) {
+  const n = c.getChildCount(), s = n < 10 ? 34 : 42;
+  return L.divIcon({ html: `<div class="cl">${n}</div>`, className: '', iconSize: [s, s] });
+}
+function renderMap(rows) {
+  cluster.clearLayers();
+  const byCountry = {};
+  rows.forEach(h => (byCountry[h.country] = byCountry[h.country] || []).push(h));
+  const pts = [];
+  Object.entries(byCountry).forEach(([country, list]) => {
+    const centre = GEO.features.find(f => f.properties.country === country);
+    if (!centre) return;
+    list.forEach((h, i) => {
+      // spread markers on a golden-angle spiral around the centre (Turf geodesic offset)
+      const p = turf.destination(centre, 6 + 9 * Math.sqrt(i), (i * 137.5) % 360, { units: 'kilometers' });
+      const [lng, lat] = p.geometry.coordinates;
+      pts.push(p);
+      const needs = NEED_DEFS.filter(d => d[2](h) === true).map(d => d[1]);
+      const m = L.circleMarker([lat, lng], { radius: 7, weight: 2, color: css('--surface-1'), fillColor: css('--series-1'), fillOpacity: 1 });
+      m.bindPopup(`<b>${esc(h.id)}</b> · ${esc(h.country)} · ${esc(h.form)} form<br>
+        Assessed: ${esc(h.date || 'n/a')} · HoH: ${esc(h.gender || 'n/a')}<br>
+        Income: ${esc(h.income || 'n/a')}<br>
+        <b>Needs:</b> ${needs.length ? needs.map(esc).join(', ') : 'none recorded'}
+        ${h.legalType.length ? `<br><b>Legal:</b> ${h.legalType.map(esc).join(', ')}` : ''}`);
+      cluster.addLayer(m);
+    });
+  });
+  if (pts.length) {
+    const [w, s, e, n] = turf.bbox(turf.featureCollection(pts));
+    map.fitBounds([[s, w], [n, e]], { padding: [30, 30], maxZoom: 7 });
+  }
+}
+
+// ---------- tables
+let tblNA, tblRef, tblFGD;
+// ---------- table column dropdown filters ("All" clears the column)
+const SELECTS = [];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const monthLabel = ym => MONTH_NAMES[+ym.slice(5, 7) - 1].slice(0, 3) + ' ' + ym.slice(0, 4);
+const fmtDate = iso => iso ? `${iso.slice(8, 10)} ${MONTH_NAMES[+iso.slice(5, 7) - 1].slice(0, 3)} ${iso.slice(0, 4)}` : '';
+function selectFilter(cell, onRendered, success, cancel, params) {
+  const sel = document.createElement('select');
+  sel.className = 'form-select form-select-sm tf-select';
+  sel.dataset.field = cell.getColumn().getField();
+  if (params && params.byMonth) sel.dataset.byMonth = '1';
+  sel.add(new Option('All', ''));
+  sel.addEventListener('change', () => success(sel.value));
+  sel.addEventListener('click', e => e.stopPropagation());
+  SELECTS.push({ sel, table: cell.getColumn().getTable() });
+  return sel;
+}
+function refreshSelects(table) {
+  // options come from the rows currently loaded (after dashboard filters), keeping the current choice
+  SELECTS.filter(s => s.table === table).forEach(({ sel }) => {
+    const f = sel.dataset.field, cur = sel.value, vals = new Set();
+    const byMonth = sel.dataset.byMonth;
+    table.getData().forEach(r => [].concat(r[f]).forEach(x => { if (x != null && x !== '') vals.add(byMonth ? String(x).slice(0, 7) : x); }));
+    if (cur) vals.add(cur);
+    sel.length = 1;
+    [...vals].sort().forEach(v => sel.add(new Option(byMonth ? monthLabel(v) : v, v)));
+    sel.value = cur;
+  });
+}
+function clearTableFilters(table, extra) {
+  table.clearHeaderFilter();
+  SELECTS.filter(s => s.table === table).forEach(s => { s.sel.value = ''; });
+  if (extra) extra();
+}
+const DATE_COL = { sorter: 'string', formatter: c => fmtDate(c.getValue()), headerFilter: selectFilter,
+  headerFilterParams: { byMonth: true }, headerFilterFunc: (t, v) => (v || '').startsWith(t), minWidth: 120 };
+const SEL = { minWidth: 110, headerFilter: selectFilter, headerFilterFunc: (t, v) => Array.isArray(v) ? v.includes(t) : v === t };
+
+function initTables() {
+  const list = v => Array.isArray(v) ? v.join('; ') : v;
+  tblNA = new Tabulator('#tblNA', {
+    layout: 'fitDataStretch', height: 420, renderVertical: 'basic', placeholder: 'No records match the filters',
+    columns: [
+      { title: 'ID', field: 'id', headerFilter: 'input', width: 80 },
+      { title: 'Form', field: 'form', ...SEL },
+      { title: 'Date', field: 'date', ...DATE_COL },
+      { title: 'Country', field: 'country', ...SEL },
+      { title: 'HoH Gender', field: 'gender', ...SEL },
+      { title: 'Income vs Basic Needs', field: 'income', ...SEL },
+      { title: 'Income Sources', field: 'incSrc', formatter: c => esc(list(c.getValue())), ...SEL, width: 220 },
+      { title: 'Health Issues', field: 'health', ...SEL },
+      { title: 'Health/MHPSS Need', field: 'healthNeed', ...SEL },
+      { title: 'MHPSS Services', field: 'mhpss', ...SEL },
+      { title: 'Legal Needed', field: 'legal', ...SEL },
+      { title: 'Legal Type', field: 'legalType', formatter: c => esc(list(c.getValue())), ...SEL, width: 220 },
+      { title: 'Barriers', field: 'barriers', ...SEL },
+      { title: 'Barrier Types', field: 'barrierType', formatter: c => esc(list(c.getValue())), ...SEL, width: 220 },
+      { title: 'Protection Concern', field: 'protection', ...SEL },
+      { title: 'Notes', field: 'notes', formatter: 'textarea', headerFilter: 'input', width: 320 },
+    ],
+  });
+  tblRef = new Tabulator('#tblRef', {
+    layout: 'fitColumns', height: 420, renderVertical: 'basic', placeholder: 'No records match the filters',
+    columns: [
+      { title: 'Organisation', field: 'org', headerFilter: 'input', minWidth: 260 },
+      { title: 'Organisation Type', field: 'orgType', ...SEL },
+      { title: 'Referral Date', field: 'date', ...DATE_COL },
+      { title: 'Referral Type', field: 'type', ...SEL },
+      { title: 'Individuals', field: 'n', hozAlign: 'right', bottomCalc: 'sum' },
+    ],
+  });
+  tblFGD = new Tabulator('#tblFGD', {
+    layout: 'fitColumns', height: 360, renderVertical: 'basic',
+    columns: [
+      { title: 'FGD ID', field: 'id', headerFilter: 'input', bottomCalc: () => 'Total' },
+      { title: 'Male', field: 'male', hozAlign: 'right', bottomCalc: 'sum' },
+      { title: 'Female', field: 'female', hozAlign: 'right', bottomCalc: 'sum' },
+      { title: 'Total', field: 'total', hozAlign: 'right', bottomCalc: 'sum' },
+    ],
+  });
+  document.getElementById('searchNA').addEventListener('input', e => {
+    const t = e.target.value.toLowerCase();
+    tblNA.setFilter(t ? (row => JSON.stringify(row).toLowerCase().includes(t)) : []);
+  });
+  document.getElementById('clearNA').onclick = () => clearTableFilters(tblNA, () => {
+    document.getElementById('searchNA').value = ''; tblNA.clearFilter();
+  });
+  document.getElementById('clearRef').onclick = () => clearTableFilters(tblRef);
+  document.getElementById('dlNA').onclick = () => tblNA.download('csv', 'needs-assessments.csv');
+  document.getElementById('dlRef').onclick = () => tblRef.download('csv', 'referrals.csv');
+}
+
+// ---------- render: needs assessments (cross-filter: each chart is filtered by all OTHER filters)
+function renderNA() {
+  const all = DATA.hh, rows = applyFilters(all, NA, NA_DIMS);
+  const ex = k => applyFilters(all, NA, NA_DIMS, k);
+  chips(document.getElementById('chipsNA'), NA, NA_DIMS, renderNA, ['country', 'gender', 'form', 'year', 'month']);
+
+  const share = fn => { const a = rows.map(fn).filter(v => v !== null); return { y: a.filter(Boolean).length, n: a.length }; };
+  const inc = share(NEED_DEFS[0][2]), lg = share(NEED_DEFS[4][2]), hn = share(NEED_DEFS[1][2]), pr = share(NEED_DEFS[6][2]);
+  document.getElementById('kpisNA').innerHTML =
+    kpi('Households assessed', rows.length, `${rows.filter(r => r.form === 'Full').length} full · ${rows.filter(r => r.form === 'Quick').length} quick`) +
+    kpi('Female-headed', `${pct(rows.filter(r => r.gender === 'Female').length, rows.length)}%`, `${rows.filter(r => r.gender === 'Female').length} of ${rows.length}`) +
+    kpi('Not meeting basic needs', `${pct(inc.y, inc.n)}%`, `${inc.y} of ${inc.n} answered`) +
+    kpi('Health/MHPSS need', `${pct(hn.y, hn.n)}%`, `${hn.y} of ${hn.n} answered`) +
+    kpi('Need legal support', `${pct(lg.y, lg.n)}%`, `${lg.y} of ${lg.n} answered`) +
+    kpi('Protection concern', `${pct(pr.y, pr.n)}%`, `${pr.y} of ${pr.n} answered`);
+
+  const nr = ex('need');
+  hbar('chNeeds', NEED_DEFS.map(([, label, fn]) => {
+    const a = nr.map(fn).filter(v => v !== null), y = a.filter(Boolean).length;
+    return { name: label, value: pct(y, a.length), label: `{n|${y}}  {p|${pct(y, a.length)}%}`,
+      tip: `${esc(label)}<br><b>${y}</b> of ${a.length} households · ${pct(y, a.length)}%` };
+  }), NA.need, v => toggle(NA, 'need', v, renderNA), { max: 100 });
+  // % = share of households that answered the question (multi-answer charts can add up to more than 100%)
+  const HH = { of: 'households' };
+  [['chCountry', 'country', r => r.country], ['chIncome', 'income', r => r.income], ['chMhpss', 'mhpss', r => r.mhpss]].forEach(([id, k, fn]) => {
+    const base = ex(k);
+    hbar(id, countOne(base, fn), NA[k], v => toggle(NA, k, v, renderNA), { ...HH, total: answered(base, k) });
+  });
+  ['incSrc', 'legalType', 'barrierType'].forEach(k => {
+    const base = ex(k), id = { incSrc: 'chIncSrc', legalType: 'chLegal', barrierType: 'chBarrier' }[k];
+    hbar(id, countMulti(base, k), NA[k], v => toggle(NA, k, v, renderNA), { ...HH, total: answered(base, k) });
+  });
+
+  renderMap(rows);
+  tblNA.replaceData(rows).then(() => refreshSelects(tblNA));
+}
+
+// ---------- render: referrals
+function renderRef() {
+  const all = DATA.ref, rows = applyFilters(all, RF, RF_DIMS);
+  const ex = k => applyFilters(all, RF, RF_DIMS, k);
+  chips(document.getElementById('chipsRef'), RF, RF_DIMS, renderRef, ['year', 'month']);
+  const ind = rows.reduce((s, r) => s + (r.n || 0), 0), missing = rows.filter(r => r.n == null).length;
+  document.getElementById('kpisRef').innerHTML =
+    kpi('Referrals', rows.length) +
+    kpi('Individuals referred', ind, missing ? `${missing} referrals with no number` : '') +
+    kpi('Organisations', new Set(rows.map(r => r.org)).size) +
+    kpi('Referral types', new Set(rows.map(r => r.type)).size);
+
+  const REF = k => ({ of: 'referrals', total: ex(k).length });
+  hbar('chRefType', countOne(ex('type'), r => r.type), RF.type, v => toggle(RF, 'type', v, renderRef), REF('type'));
+  hbar('chRefOrg', countOne(ex('org'), r => r.org).slice(0, 12), RF.org, v => toggle(RF, 'org', v, renderRef), REF('org'));
+  hbar('chRefOrgType', countOne(ex('orgType'), r => r.orgType), RF.orgType, v => toggle(RF, 'orgType', v, renderRef), REF('orgType'));
+
+  // month series: continuous months between first and last dated referral
+  const dated = rows.filter(r => r.date).map(r => r.date.slice(0, 7)).sort();
+  const months = [];
+  if (dated.length) {
+    let [y, m] = dated[0].split('-').map(Number); const end = dated[dated.length - 1];
+    while (true) { const k = `${y}-${String(m).padStart(2, '0')}`; months.push(k); if (k >= end) break; if (++m > 12) { m = 1; y++; } }
+  }
+  const cnt = months.map(k => dated.filter(d => d === k).length);
+  const fmt = k => new Date(k + '-01T00:00:00').toLocaleString('en', { month: 'short', year: '2-digit' });
+  const c = chart('chRefMonth');
+  c.setOption({
+    ...baseOpt(),
+    grid: { left: 8, right: 12, top: 34, bottom: 4, containLabel: true },
+    tooltip: { ...baseOpt().tooltip, trigger: 'axis', axisPointer: { type: 'shadow' },
+      formatter: ps => `${ps[0].name}<br><b>${ps[0].value}</b> referrals · ${pct(ps[0].value, dated.length)}% of ${dated.length} dated` },
+    xAxis: { type: 'category', data: months.map(fmt), axisTick: { show: false }, axisLine: { lineStyle: { color: css('--grid') } }, axisLabel: { color: css('--text-secondary'), fontSize: 11 } },
+    yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: css('--grid') } }, axisLabel: { color: css('--text-muted'), fontSize: 11 } },
+    series: [{ name: 'Referrals', type: 'bar', barMaxWidth: 30, data: cnt, itemStyle: { color: css('--series-1'), borderRadius: [4, 4, 0, 0] },
+      label: { show: true, position: 'top', lineHeight: 13, formatter: p => p.value ? `{n|${p.value}}
+{p|${pct(p.value, dated.length)}%}` : '',
+        rich: { n: { color: css('--text-primary'), fontWeight: 700, fontSize: 11 }, p: { color: css('--text-muted'), fontSize: 10 } } } }],
+  }, true);
+  tblRef.replaceData(rows).then(() => refreshSelects(tblRef));
+}
+
+// ---------- render: FGD
+function renderFGD() {
+  const rows = DATA.fgd, m = rows.reduce((s, r) => s + r.male, 0), f = rows.reduce((s, r) => s + r.female, 0);
+  document.getElementById('kpisFGD').innerHTML =
+    kpi('Focus groups', rows.length) + kpi('Individuals', m + f) +
+    kpiShare('Female', f, m + f, css('--series-1')) + kpiShare('Male', m, m + f, css('--series-2'), 'navy');
+
+  const d = chart('chFGDGender'), surf = css('--surface-1');
+  d.setOption({
+    ...baseOpt(),
+    tooltip: { ...baseOpt().tooltip, formatter: p => `${p.name}<br><b>${p.value}</b> individuals · ${p.percent.toFixed(0)}%` },
+    legend: { bottom: 0, left: 'center', icon: 'roundRect', itemWidth: 12, itemHeight: 12, textStyle: { color: css('--text-secondary'), fontSize: 12 },
+      formatter: n => `${n}  ${n === 'Female' ? f : m} (${pct(n === 'Female' ? f : m, m + f)}%)` },
+    graphic: [{ type: 'text', left: 'center', top: '38%', style: { text: String(m + f), fill: css('--navy'), font: '900 30px Lato, Arial, sans-serif', textAlign: 'center' } },
+      { type: 'text', left: 'center', top: '50%', style: { text: 'individuals', fill: css('--text-muted'), font: '400 12px Lato, Arial, sans-serif', textAlign: 'center' } }],
+    series: [{ type: 'pie', radius: ['52%', '74%'], center: ['50%', '45%'], startAngle: 90, avoidLabelOverlap: true,
+      itemStyle: { borderColor: surf, borderWidth: 2 },
+      label: { show: true, formatter: p => `${p.percent.toFixed(0)}%`, color: css('--text-primary'), fontSize: 15, fontWeight: 700 },
+      labelLine: { length: 8, length2: 6, lineStyle: { color: css('--border') } },
+      emphasis: { scale: true, scaleSize: 4 },
+      data: [{ name: 'Female', value: f, itemStyle: { color: css('--series-1') } }, { name: 'Male', value: m, itemStyle: { color: css('--series-2') } }] }],
+  }, true);
+
+  const c = chart('chFGD');
+  c.setOption({
+    ...baseOpt(),
+    legend: { top: 0, left: 0, data: ['Female', 'Male'], textStyle: { color: css('--text-secondary') }, icon: 'roundRect', itemWidth: 12, itemHeight: 12 },
+    grid: { left: 8, right: 12, top: 34, bottom: 4, containLabel: true },
+    tooltip: { ...baseOpt().tooltip, trigger: 'axis', axisPointer: { type: 'shadow' },
+      formatter: ps => `${ps[0].name} · <b>${rows[ps[0].dataIndex].total}</b> individuals<br>` +
+        ps.filter(p => p.seriesName !== 'Total').map(p => `${p.marker}${p.seriesName}: <b>${p.value}</b> (${pct(p.value, rows[p.dataIndex].total)}%)`).join('<br>') },
+    xAxis: { type: 'category', data: rows.map(r => r.id), axisTick: { show: false }, axisLine: { lineStyle: { color: css('--grid') } }, axisLabel: { color: css('--text-secondary'), fontSize: 10, rotate: 40 } },
+    yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: css('--grid') } }, axisLabel: { color: css('--text-muted'), fontSize: 11 } },
+    series: [
+      { name: 'Female', type: 'bar', stack: 'p', barMaxWidth: 40, data: rows.map(r => r.female), itemStyle: { color: css('--series-1'), borderColor: surf, borderWidth: 1 },
+        label: { show: true, position: 'inside', color: '#fff', fontSize: 10, lineHeight: 12,
+        formatter: p => p.value >= 2 ? `{n|${p.value}}
+${pct(p.value, rows[p.dataIndex].total)}%` : '', rich: { n: { fontWeight: 700, fontSize: 11, color: '#fff' } } } },
+      { name: 'Male', type: 'bar', stack: 'p', barMaxWidth: 40, data: rows.map(r => r.male), itemStyle: { color: css('--series-2'), borderColor: surf, borderWidth: 1, borderRadius: [4, 4, 0, 0] },
+        label: { show: true, position: 'inside', color: '#fff', fontSize: 10, lineHeight: 12,
+        formatter: p => p.value >= 2 ? `{n|${p.value}}
+${pct(p.value, rows[p.dataIndex].total)}%` : '', rich: { n: { fontWeight: 700, fontSize: 11, color: '#fff' } } } },
+      { name: 'Total', type: 'bar', stack: 'p', data: rows.map(() => 0), silent: true, tooltip: { show: false },
+        label: { show: true, position: 'top', color: css('--text-primary'), fontWeight: 700, fontSize: 11, formatter: p => rows[p.dataIndex].total } },
+    ],
+  }, true);
+  tblFGD.replaceData(rows);
+}
+
+// ---------- boot / reload
+function fillSelect(id, values, keep) {
+  const s = document.getElementById(id);
+  [...s.options].slice(keep).forEach(o => o.remove());
+  values.forEach(v => Array.isArray(v) ? s.add(new Option(v[1], v[0])) : s.add(new Option(v, v)));
+}
+function load(raw, note) {
+  DATA = normalise(raw);
+  NA = {}; RF = {};
+  fillSelect('fCountry', [...new Set(DATA.hh.map(h => h.country))].sort(), 1);
+  fillSelect('fGender', [...new Set(DATA.hh.map(h => h.gender).filter(Boolean))].sort(), 1);
+  const years = rows => [...new Set(rows.map(r => (r.date || '').slice(0, 4)).filter(Boolean))].sort();
+  const months = rows => [...new Set(rows.map(r => (r.date || '').slice(5, 7)).filter(Boolean))].sort().map(m => [m, MONTH_NAMES[+m - 1]]);
+  fillSelect('fYear', years(DATA.hh), 1);
+  fillSelect('fMonth', months(DATA.hh), 1);
+  fillSelect('fRefMonth', months(DATA.ref), 1);
+  fillSelect('fRefYear', [...new Set(DATA.ref.map(r => (r.date || '').slice(0, 4)).filter(Boolean))].sort(), 1);
+  renderAll();
+}
+const renderAll = () => { renderNA(); renderRef(); renderFGD(); };
+
+document.getElementById('fCountry').onchange = e => { NA.country = e.target.value || null; renderNA(); };
+document.getElementById('fGender').onchange = e => { NA.gender = e.target.value || null; renderNA(); };
+document.getElementById('fForm').onchange = e => { NA.form = e.target.value || null; renderNA(); };
+document.getElementById('fRefYear').onchange = e => { RF.year = e.target.value || null; renderRef(); };
+document.getElementById('fRefMonth').onchange = e => { RF.month = e.target.value || null; renderRef(); };
+document.getElementById('fYear').onchange = e => { NA.year = e.target.value || null; renderNA(); };
+document.getElementById('fMonth').onchange = e => { NA.month = e.target.value || null; renderNA(); };
+document.getElementById('resetNA').onclick = () => { NA = {}; syncSelects(); renderNA(); };
+document.getElementById('resetRef').onclick = () => { RF = {}; syncSelects(); renderRef(); };
+
+// SheetJS: load an updated cleaned workbook (same sheet names / headers)
+document.getElementById('fileInput').addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file) return;
+  try {
+    const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+    const raw = {};
+    Object.values(SHEETS).forEach(n => { if (wb.Sheets[n]) raw[n] = XLSX.utils.sheet_to_json(wb.Sheets[n], { defval: null }); });
+    if (!raw[SHEETS.full] && !raw[SHEETS.ref]) throw new Error('Expected sheets were not found: ' + Object.values(SHEETS).join(', '));
+    load(raw, `Data loaded from ${file.name}`);
+  } catch (err) { alert('Could not read this file.\n' + err.message); }
+  e.target.value = '';
+});
+
+// charts/map in hidden tabs need a resize when shown
+document.querySelectorAll('[data-bs-toggle="tab"]').forEach(b => b.addEventListener('shown.bs.tab', () => {
+  Object.values(charts).forEach(c => c.resize()); map.invalidateSize();
+  [tblNA, tblRef, tblFGD].forEach(t => t.redraw(true));
+}));
+
+initMap(); initTables();
+// Tabulator builds asynchronously; render once all tables are ready
+Promise.all([tblNA, tblRef, tblFGD].map(t => new Promise(r => t.on('tableBuilt', r))))
+  .then(() => load(JSON.parse(document.getElementById('rawData').textContent), 'Data: Needs Assessments - Cleaned v2 (embedded). Use "Load Excel" to refresh from an updated workbook.'));
+</script>
+</body>
+</html>
