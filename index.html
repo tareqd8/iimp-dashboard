@@ -78,7 +78,7 @@ body { background: var(--surface-0); color: var(--text-primary); font-family: La
 /* summary panel */
 .navbar .btn-summary { background: var(--un-blue); color: #fff; border: 1px solid var(--un-blue); font-weight: 700; }
 .navbar .btn-summary:hover { background: #0089bf; color: #fff; }
-.navbar .btn-summary .oi { color: #fff; }
+.navbar .btn-summary .oi, .navbar .btn-pdf .oi { color: #fff; }
 #summaryPanel { width: min(560px, 100vw); }
 #summaryPanel .offcanvas-header { background: var(--navy); color: #fff; border-bottom: 4px solid var(--un-blue); }
 #summaryPanel .offcanvas-title { font-weight: 900; font-size: 1.05rem; text-transform: uppercase; letter-spacing: .01em; }
@@ -113,6 +113,8 @@ body { background: var(--surface-0); color: var(--text-primary); font-family: La
   <div class="container-fluid px-3">
     <span class="navbar-brand mb-0">Needs Assessment Dashboard</span>
     <div class="d-flex gap-2 align-items-center">
+      <button class="btn btn-sm btn-load btn-pdf" type="button" title="Download a 2-page PDF brief of the current view">
+        <span class="oi" data-icon="Document"></span>PDF brief</button>
       <button class="btn btn-sm btn-summary" type="button" data-bs-toggle="offcanvas" data-bs-target="#summaryPanel">
         <span class="oi" data-icon="Information-management"></span>Summary</button>
       <label class="btn btn-sm btn-load mb-0" title="Load an updated cleaned workbook (.xlsx)">
@@ -271,6 +273,7 @@ body { background: var(--surface-0); color: var(--text-primary); font-family: La
   </div>
   <div class="offcanvas-body">
     <div class="d-flex gap-2 mb-3 sum-actions">
+      <button class="btn btn-sm btn-outline-secondary btn-pdf">Download PDF brief</button>
       <button class="btn btn-sm btn-outline-secondary" id="sumCopy">Copy text</button>
       <button class="btn btn-sm btn-outline-secondary" id="sumPrint">Print / PDF</button>
     </div>
@@ -284,6 +287,7 @@ body { background: var(--surface-0); color: var(--text-primary); font-family: La
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <script src="https://unpkg.com/tabulator-tables@6.2.1/dist/js/tabulator.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
 
 <!-- Raw sheet rows (same shape SheetJS produces from the cleaned workbook) -->
@@ -780,7 +784,7 @@ ${pct(p.value, rows[p.dataIndex].total)}%` : '', rich: { n: { fontWeight: 700, f
 
 // ---------- summary & recommendations (rule-based, generated from the data under the current filters)
 const andList = a => a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1];
-const lc = s => /^[A-Z]{2,}\b/.test(s) ? s : s.toLowerCase();
+const lc = s => s.split(/(\s+|\/)/).map(w => /^[A-Z]{2,}/.test(w) ? w : w.toLowerCase()).join('');   // keep acronyms (MHPSS, UNDP)
 function activeFilters() {
   const out = [];
   [[NA, NA_DIMS, 'Needs assessments'], [RF, RF_DIMS, 'Referrals'], [FG, FG_DIMS, 'Briefings/FGDs']].forEach(([st, dims, area]) => {
@@ -916,6 +920,252 @@ document.getElementById('sumPrint').onclick = () => {
   window.print();
   setTimeout(() => document.body.classList.remove('print-summary'), 500);
 };
+
+
+// ---------- 2-page PDF brief (jsPDF, generated in the browser from the current filters)
+const PDF_C = { navy: [26, 43, 76], blue: [0, 158, 219], ink: [35, 31, 32], sec: [77, 79, 83], mut: [138, 138, 138], line: [223, 225, 224], tint: [224, 243, 251] };
+function iconPNG(name, color, px = 96) {
+  return new Promise(res => {
+    const svg = ICONS[name];
+    if (!svg) return res(null);
+    const src = svg.replace('<svg ', `<svg xmlns="http://www.w3.org/2000/svg" width="${px}" height="${px}" `).replace('fill="currentColor"', `fill="${color}"`);
+    const img = new Image();
+    img.onload = () => { const c = document.createElement('canvas'); c.width = c.height = px; c.getContext('2d').drawImage(img, 0, 0, px, px); res(c.toDataURL('image/png')); };
+    img.onerror = () => res(null);
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(src);
+  });
+}
+// offscreen ECharts render -> PNG (canvas renderer so jsPDF can embed it)
+function chartPNG(option, wPx, hPx) {
+  const div = document.createElement('div');
+  div.style.cssText = `position:fixed;left:-10000px;top:0;width:${wPx}px;height:${hPx}px`;
+  document.body.appendChild(div);
+  const c = echarts.init(div, null, { renderer: 'canvas', width: wPx, height: hPx });
+  c.setOption({ animation: false, textStyle: { fontFamily: 'Lato, Arial, sans-serif' }, ...option });
+  const url = c.getDataURL({ type: 'jpeg', pixelRatio: 2.5, backgroundColor: '#ffffff' });
+  c.dispose(); div.remove();
+  return url;
+}
+function pdfHbar(items, total) {
+  const data = items.slice(0, 8).reverse(), blue = css('--series-1');
+  return {
+    grid: { left: 4, right: 62, top: 4, bottom: 4, containLabel: true },
+    xAxis: { type: 'value', show: false, max: v => v.max * 1.02 },
+    yAxis: { type: 'category', data: data.map(d => d.name), axisTick: { show: false }, axisLine: { show: false },
+      axisLabel: { color: '#4d4f53', fontSize: 12, width: 160, overflow: 'truncate' } },
+    series: [{ type: 'bar', barMaxWidth: 16, data: data.map(d => ({ value: d.value, itemStyle: { color: blue, borderRadius: [0, 3, 3, 0] } })),
+      label: { show: true, position: 'right', fontSize: 12, formatter: p => `{n|${data[p.dataIndex].n ?? p.value}}  {p|${data[p.dataIndex].p ?? pct(p.value, total)}%}`,
+        rich: { n: { fontWeight: 700, color: '#231f20', fontSize: 12 }, p: { color: '#8a8a8a', fontSize: 12 } } } }],
+  };
+}
+async function downloadBrief(btn) {
+  if (!window.jspdf) { alert('The PDF library could not load. Check the internet connection and try again.'); return; }
+  const label = btn && btn.innerHTML;
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing PDF…'; }
+  try {
+    buildSummary();   // reuse the summary text (follows current filters)
+    const sb = document.getElementById('summaryBody');
+    const secItems = title => { const s = [...sb.querySelectorAll('.sum-sec')].find(x => x.querySelector('h6').textContent.trim().toUpperCase() === title.toUpperCase());
+      return s ? [...s.querySelectorAll('li')].map(li => li.textContent.replace(/\s+/g, ' ').trim()) : []; };
+    const recs = [...sb.querySelectorAll('.sum-recs li')].map(li => ({ tag: li.querySelector('.tag').textContent, text: li.textContent.replace(li.querySelector('.tag').textContent, '').trim() }));
+    const gap = [...sb.querySelectorAll('.sum-gap tbody tr')].map(tr => [...tr.children].map(td => td.textContent));
+    const filt = (sb.querySelector('.sum-filter') || {}).textContent || '';
+
+    const hh = applyFilters(DATA.hh, NA, NA_DIMS), ref = applyFilters(DATA.ref, RF, RF_DIMS), fg = applyFilters(DATA.fgd, FG, FG_DIMS);
+    const share = fn => { const a = hh.map(fn).filter(v => v !== null), y = a.filter(Boolean).length; return { y, n: a.length, p: pct(y, a.length) }; };
+    const S = Object.fromEntries(NEED_DEFS.map(([k, , fn]) => [k, share(fn)]));
+    const fem = hh.filter(h => h.gender === 'Female').length;
+    const ans = k => hh.filter(h => h[k].length).length;
+    const refInd = ref.reduce((s, r) => s + (r.n || 0), 0);
+    const fm = fg.reduce((s, r) => s + r.male, 0), ff = fg.reduce((s, r) => s + r.female, 0);
+
+    // charts (px sizes keep text readable once scaled into the page)
+    const W2 = 470, H2 = 300;
+    const ch = {
+      needs: chartPNG(pdfHbar(NEED_DEFS.map(([k, label]) => ({ name: label, value: S[k].p, n: S[k].y, p: S[k].p })).filter((d, i) => S[NEED_DEFS[i][0]].n), 100), W2, H2),
+      barriers: chartPNG(pdfHbar(countMulti(hh, 'barrierType'), ans('barrierType')), W2, H2),
+      legal: chartPNG(pdfHbar(countMulti(hh, 'legalType'), ans('legalType')), W2, H2),
+      income: chartPNG(pdfHbar(countMulti(hh, 'incSrc'), ans('incSrc')), W2, H2),
+      refType: chartPNG(pdfHbar(countOne(ref, r => r.type), ref.length), W2, H2),
+      fgCountry: chartPNG(pdfHbar([...fg.reduce((m, r) => m.set(r.country, (m.get(r.country) || 0) + r.total), new Map())].map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value), fm + ff), 250, 200),
+    };
+    const dated = ref.filter(r => r.date).map(r => r.date.slice(0, 7)).sort();
+    const months = [];
+    if (dated.length) { let [y, m] = dated[0].split('-').map(Number); while (true) { const k = `${y}-${String(m).padStart(2, '0')}`; months.push(k); if (k >= dated[dated.length - 1]) break; if (++m > 12) { m = 1; y++; } } }
+    ch.refMonth = chartPNG({
+      grid: { left: 4, right: 8, top: 26, bottom: 4, containLabel: true },
+      xAxis: { type: 'category', data: months.map(k => MONTH_NAMES[+k.slice(5) - 1].slice(0, 3) + ' ' + k.slice(2, 4)), axisTick: { show: false }, axisLabel: { fontSize: 11, color: '#4d4f53' }, axisLine: { lineStyle: { color: '#dfe1e0' } } },
+      yAxis: { type: 'value', minInterval: 1, splitLine: { lineStyle: { color: '#ececec' } }, axisLabel: { fontSize: 11, color: '#8a8a8a' } },
+      series: [{ type: 'bar', barMaxWidth: 22, data: months.map(k => dated.filter(d => d === k).length), itemStyle: { color: css('--series-1'), borderRadius: [3, 3, 0, 0] },
+        label: { show: true, position: 'top', fontSize: 11, fontWeight: 700, color: '#231f20', formatter: p => p.value || '' } }],
+    }, W2, H2);
+    ch.gender = chartPNG({
+      legend: { bottom: 0, left: 'center', icon: 'roundRect', itemWidth: 12, itemHeight: 12, textStyle: { fontSize: 12, color: '#4d4f53' },
+        formatter: n => `${n}  ${n === 'Female' ? ff : fm} (${pct(n === 'Female' ? ff : fm, fm + ff)}%)` },
+      graphic: [{ type: 'text', left: 'center', top: '36%', style: { text: String(fm + ff), fill: '#1a2b4c', font: '900 26px Lato, Arial, sans-serif', textAlign: 'center' } },
+        { type: 'text', left: 'center', top: '50%', style: { text: 'individuals', fill: '#8a8a8a', font: '12px Lato, Arial, sans-serif', textAlign: 'center' } }],
+      series: [{ type: 'pie', radius: ['50%', '72%'], center: ['50%', '44%'], startAngle: 90, itemStyle: { borderColor: '#fff', borderWidth: 2 },
+        label: { show: true, formatter: p => `${p.percent.toFixed(0)}%`, fontSize: 13, fontWeight: 700, color: '#231f20' },
+        data: [{ name: 'Female', value: ff, itemStyle: { color: css('--series-1') } }, { name: 'Male', value: fm, itemStyle: { color: css('--series-2') } }] }],
+    }, 250, 200);
+
+    const iconNames = ['Needs-assessment', 'Person-1', 'Person-2', 'Cash-transfer', 'Health', 'Rule-of-law-and-justice', 'Protection', 'Case-management', 'People-reached', 'NGO-office',
+      'Coordination', 'Meeting', 'Group', 'Road-barrier', 'People-in-need', 'Livelihood', 'Calendar', 'Map', 'Gender', 'Information-management'];
+    const IC = {}; for (const n of iconNames) IC[n] = await iconPNG(n, '#009edb');
+    const ICW = {}; for (const n of ['Needs-assessment', 'Case-management', 'Meeting']) ICW[n] = await iconPNG(n, '#ffffff');
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+    const PW = 210, PH = 297, M = 12, CW = PW - 2 * M;
+    const today = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const col = c => doc.setTextColor(...c);
+    const header = (title, sub) => {
+      doc.setFillColor(...PDF_C.navy); doc.rect(0, 0, PW, 24, 'F');
+      doc.setFillColor(...PDF_C.blue); doc.rect(0, 24, PW, 1.4, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.setTextColor(255, 255, 255); doc.text(title, M, 11);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(200, 214, 230); doc.text(sub, M, 17.5);
+      doc.text(today, PW - M, 11, { align: 'right' });
+    };
+    const footer = (n) => {
+      doc.setDrawColor(...PDF_C.line); doc.setLineWidth(.2); doc.line(M, PH - 10, PW - M, PH - 10);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(7); col(PDF_C.mut);
+      doc.text(`Source: IIMP needs assessment dashboard · iimp.savywaves.com · generated ${today}. Icons: OCHA Humanitarian Icons (CC0).`, M, PH - 6);
+      doc.text(`Page ${n} of 2`, PW - M, PH - 6, { align: 'right' });
+    };
+    const secTitle = (y, text, icon) => {
+      if (icon && IC[icon]) doc.addImage(IC[icon], 'PNG', M, y - 3.6, 4.6, 4.6);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(10); col(PDF_C.navy);
+      doc.text(text.toUpperCase(), M + (icon ? 6.2 : 0), y);
+      doc.setDrawColor(...PDF_C.blue); doc.setLineWidth(.5); doc.line(M, y + 1.8, PW - M, y + 1.8);
+      return y + 7;
+    };
+    const tiles = (y, list, h = 19) => {
+      const gapX = 3, w = (CW - gapX * (list.length - 1)) / list.length;
+      list.forEach(([lab, val, sub, icon], i) => {
+        const x = M + i * (w + gapX);
+        doc.setFillColor(255, 255, 255); doc.setDrawColor(...PDF_C.line); doc.setLineWidth(.25); doc.roundedRect(x, y, w, h, 1.5, 1.5, 'FD');
+        doc.setFillColor(...PDF_C.blue); doc.rect(x, y, w, .9, 'F');
+        if (icon && IC[icon]) { doc.setFillColor(...PDF_C.tint); doc.circle(x + w - 4.6, y + 5.4, 3, 'F'); doc.addImage(IC[icon], 'PNG', x + w - 6.4, y + 3.6, 3.6, 3.6); }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(5.7); col(PDF_C.sec);
+        doc.text(doc.splitTextToSize(lab.toUpperCase(), w - 9.5), x + 2.2, y + 4.6);
+        doc.setFontSize(15); col(PDF_C.navy); doc.text(String(val), x + 2.5, y + 13.5);
+        if (sub) { doc.setFont('helvetica', 'normal'); doc.setFontSize(6.2); col(PDF_C.mut); doc.text(doc.splitTextToSize(sub, w - 4)[0], x + 2.5, y + 17); }
+      });
+      return y + h + 5;
+    };
+    const bullets = (y, items, size = 8.4, width = CW, x0 = M) => {
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(size); col(PDF_C.ink);
+      items.forEach(it => {
+        const lines = doc.splitTextToSize(it, width - 4);
+        doc.setFillColor(...PDF_C.blue); doc.circle(x0 + 1, y - 1, .65, 'F');
+        doc.text(lines, x0 + 3.5, y);
+        y += lines.length * size * .42 + 1.5;
+      });
+      return y;
+    };
+    const chartBox = (x, y, w, h, title, img, icon) => {
+      doc.setDrawColor(...PDF_C.line); doc.setLineWidth(.25); doc.roundedRect(x, y, w, h, 1.5, 1.5, 'S');
+      if (icon && IC[icon]) doc.addImage(IC[icon], 'PNG', x + 2.5, y + 2.2, 3.6, 3.6);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.3); col(PDF_C.navy); doc.text(title, x + (icon ? 7.3 : 2.5), y + 5.2);
+      const iw = w - 4, ih = h - 9;
+      doc.addImage(img, 'JPEG', x + 2, y + 7.5, iw, ih);
+    };
+
+    // ---------------- page 1: needs assessments
+    header('NEEDS ASSESSMENT BRIEF', 'Needs assessments · Referrals · Briefings/FGDs');
+    if (ICW['Needs-assessment']) doc.addImage(ICW['Needs-assessment'], 'PNG', PW - M - 6, 13.5, 5, 5);
+    let y = 31;
+    if (filt) { doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); col(PDF_C.sec); doc.text(doc.splitTextToSize(filt, CW), M, y); y += 5; }
+    y = tiles(y, [
+      ['Households assessed', hh.length, `${hh.filter(r => r.form === 'Full').length} full · ${hh.filter(r => r.form === 'Quick').length} quick`, 'Needs-assessment'],
+      ['Female-headed', `${pct(fem, hh.length)}%`, `${fem} of ${hh.length}`, 'Person-1'],
+      ['Not meeting basic needs', `${S.income.p}%`, `${S.income.y} of ${S.income.n} answered`, 'Cash-transfer'],
+      ['Health & MHPSS need', `${S.healthNeed.p}%`, `${S.healthNeed.y} of ${S.healthNeed.n} answered`, 'Health'],
+      ['Need legal support', `${S.legal.p}%`, `${S.legal.y} of ${S.legal.n} answered`, 'Rule-of-law-and-justice'],
+      ['Protection concern', `${S.protection.p}%`, `${S.protection.y} of ${S.protection.n} answered`, 'Protection'],
+    ]);
+    y = secTitle(y + 1, 'Key findings', 'Information-management');
+    y = bullets(y, secItems('Needs assessments'));
+    y += 2;
+    const cw2 = (CW - 4) / 2, chH = Math.min(82, (PH - 14 - y - 4) / 2);
+    chartBox(M, y, cw2, chH, 'Share of households answering Yes', ch.needs, 'People-in-need');
+    chartBox(M + cw2 + 4, y, cw2, chH, 'Barriers to accessing services', ch.barriers, 'Road-barrier');
+    y += chH + 4;
+    chartBox(M, y, cw2, chH, 'Legal support needed: type', ch.legal, 'Rule-of-law-and-justice');
+    chartBox(M + cw2 + 4, y, cw2, chH, 'Income sources', ch.income, 'Livelihood');
+    footer(1);
+
+    // ---------------- page 2: referrals, sessions, recommendations
+    doc.addPage();
+    header('REFERRALS, BRIEFINGS/FGDs & RECOMMENDATIONS', 'Needs assessment brief · page 2');
+    if (ICW['Case-management']) doc.addImage(ICW['Case-management'], 'PNG', PW - M - 6, 13.5, 5, 5);
+    y = 33;
+    y = secTitle(y, 'Referrals', 'Case-management');
+    y = tiles(y, [
+      ['Referrals', ref.length, '', 'Case-management'], ['Individuals referred', refInd, '', 'People-reached'],
+      ['Organisations', new Set(ref.map(r => r.org)).size, '', 'NGO-office'], ['Referral types', new Set(ref.map(r => r.type)).size, '', 'Coordination'],
+    ], 16);
+    const chH2 = 62;
+    chartBox(M, y, cw2, chH2, 'Referrals by type', ch.refType, 'Coordination');
+    chartBox(M + cw2 + 4, y, cw2, chH2, 'Referrals per month', ch.refMonth, 'Calendar');
+    y += chH2 + 5;
+    // needs vs referrals (left) + sessions (right)
+    const yTop = y;
+    y = secTitle(y, 'Needs compared with referrals', 'Coordination');
+    if (gap.length) {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.6); col(PDF_C.sec);
+      doc.setFontSize(7);
+      const cx = [M, M + 48, M + 70];
+      doc.text('Area', cx[0], y); doc.text('Households in need', cx[1] + 20, y, { align: 'right' }); doc.text('Share of referrals', cx[2] + 22, y, { align: 'right' });
+      y += 1.6; doc.setDrawColor(...PDF_C.line); doc.line(M, y, M + 94, y); y += 4;
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); col(PDF_C.ink);
+      gap.forEach(r => { doc.text(r[0], cx[0], y); doc.text(r[1], cx[1] + 20, y, { align: 'right' }); doc.text(r[2], cx[2] + 22, y, { align: 'right' }); y += 1.6; doc.line(M, y, M + 94, y); y += 4; });
+    }
+    let yL = y;
+    // sessions block on the right half
+    const xR = M + cw2 + 4;
+    let yR = yTop;
+    if (IC.Meeting) doc.addImage(IC.Meeting, 'PNG', xR, yR - 3.6, 4.6, 4.6);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); col(PDF_C.navy); doc.text('BRIEFINGS/FGDS', xR + 6.2, yR);
+    doc.setDrawColor(...PDF_C.blue); doc.setLineWidth(.5); doc.line(xR, yR + 1.8, PW - M, yR + 1.8);
+    yR += 6;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.2); col(PDF_C.ink);
+    const types = [...fg.reduce((m, r) => m.set(r.type, (m.get(r.type) || 0) + 1), new Map())].map(([k, v]) => `${v} ${k}`).join(' · ');
+    [[`${fg.length} sessions`, types], [`${fm + ff} individuals`, `${pct(ff, fm + ff)}% women · ${pct(fm, fm + ff)}% men`]].forEach(([a, b]) => {
+      doc.setFont('helvetica', 'bold'); col(PDF_C.navy); doc.text(a, xR, yR); doc.setFont('helvetica', 'normal'); col(PDF_C.sec); doc.text(doc.splitTextToSize(b, cw2 - 30)[0], xR + 28, yR); yR += 4.6;
+    });
+    const gW = (cw2 - 3) / 2, gH = gW * 200 / 250;
+    doc.addImage(ch.gender, 'JPEG', xR, yR, gW, gH);
+    doc.addImage(ch.fgCountry, 'JPEG', xR + gW + 3, yR, gW, gH);
+    yR += gH + 2;
+    y = Math.max(yL, yR) + 3;
+
+    // recommendations, fitted to the space left on page 2
+    y = secTitle(y, 'Recommendations', 'Information-management');
+    const limit = PH - 14;
+    let shown = 0;
+    for (const r of recs) {
+      doc.setFontSize(8.1);
+      const lines = doc.splitTextToSize(r.text, CW - 20);
+      const h = lines.length * 3.4 + 1.8;
+      if (y + h > limit - (recs.length - shown > 1 ? 5 : 0)) break;
+      const tc = r.tag.toUpperCase() === 'PRIORITY' ? PDF_C.blue : r.tag.toUpperCase() === 'DATA' ? PDF_C.mut : PDF_C.navy;
+      doc.setFillColor(...tc); doc.roundedRect(M, y - 3, 16, 4.1, .8, .8, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6.2); doc.setTextColor(255, 255, 255); doc.text(r.tag.toUpperCase(), M + 8, y - .2, { align: 'center' });
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8.1); col(PDF_C.ink); doc.text(lines, M + 19, y);
+      y += h; shown++;
+    }
+    if (shown < recs.length) { doc.setFont('helvetica', 'italic'); doc.setFontSize(7.4); col(PDF_C.mut); doc.text(`+ ${recs.length - shown} more recommendations in the dashboard Summary panel.`, M, y + 1); }
+    footer(2);
+
+    doc.save(`IIMP-needs-assessment-brief-${new Date().toISOString().slice(0, 10)}.pdf`);
+  } catch (err) {
+    console.error(err); alert('Could not create the PDF: ' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = label; }
+  }
+}
+document.querySelectorAll('.btn-pdf').forEach(b => b.addEventListener('click', () => downloadBrief(b)));
 
 // ---------- boot / reload
 function fillSelect(id, values, keep) {
